@@ -1,0 +1,10 @@
+set(SOURCES
+	src/LeveledLists.h
+	src/LeveledLists.cpp
+	src/Configs.h
+	src/Configs.cpp
+	src/Utils.h
+	src/Utils.cpp
+	src/PCH.h
+	src/main.cpp
+)
