@@ -61,4 +61,16 @@ namespace Utils {
 		uint32_t formID = ToFormId(formIdStr);
 		return GetFormFromIdentifier(pluginName, formID);
 	}
+
+	RE::TESForm* GetFormFromString(const std::string& formStr) {
+		auto delimiter = formStr.find('|');
+		if (delimiter == std::string::npos)
+			return nullptr;
+
+		std::string pluginName = formStr.substr(0, delimiter);
+		std::string formID = formStr.substr(delimiter + 1);
+
+		return Utils::GetFormFromIdentifier(pluginName, formID);
+	}
+
 }

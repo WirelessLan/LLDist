@@ -17,7 +17,9 @@ namespace Configs {
 			if (!std::regex_match(iter.path().filename().string(), filter))
 				continue;
 
+			logger::info(FMT_STRING("=========== Reading Config file: {} ==========="), iter.path().string());
 			ReadConfigFile(iter.path().string());
+			logger::info("");
 		}
     }
 
@@ -51,7 +53,6 @@ namespace Configs {
 	void ConfigReader::ReadConfigFile(const std::string& path) {
 		std::ifstream configFile(path);
 
-		logger::info(FMT_STRING("Reading Config file: {}"), path);
 		if (!configFile.is_open()) {
 			logger::warn(FMT_STRING("Cannot open the config file: {}"), path);
 			return;
@@ -129,100 +130,57 @@ namespace Configs {
 				continue;
 			}
 
-			RE::TESForm* llForm = Utils::GetFormFromIdentifier(llFormPluginName, llFormId);
-			if (!llForm) {
-				logger::warn(FMT_STRING("Invalid leveled list: {} | {}"), llFormPluginName, llFormId);
-				continue;
-			}
-
-			RE::TESLeveledList* lvList = llForm->As<RE::TESLeveledList>();
-			if (!lvList) {
-				logger::warn(FMT_STRING("Invalid leveled list: {} | {}"), llFormPluginName, llFormId);
-				continue;
-			}
-
-			modSet.insert(llForm);
+			LeveledLists::DistData distData;
+			distData.llForm = llFormPluginName + "|" + llFormId;
 
 			if (lineType == "CLEAR") {
-				clearSet.insert(llForm->formID);
-				logger::info(FMT_STRING("Clear: LeveledList[{:08X}]"), llForm->formID);
+				distData.type = LeveledLists::DistData::kClear;
+				logger::info(FMT_STRING("Clear: LeveledList[{}]"), distData.llForm);
 			}
 			else if (lineType == "ADD") {
-				RE::TESForm* addForm = Utils::GetFormFromIdentifier(targetFormPluginName, targetFormId);
-				if (!addForm) {
-					logger::warn(FMT_STRING("Invalid add target form: {} | {}"), targetFormPluginName, targetFormId);
-					continue;
-				}
+				distData.type = LeveledLists::DistData::kAdd;
+				distData.targetForm = targetFormPluginName + "|" + targetFormId;
 
-				uint16_t level;
 				try {
-					level = static_cast<uint16_t>(std::stoul(levelStr));
+					distData.level = static_cast<uint16_t>(std::stoul(levelStr));
 				}
 				catch (...) {
 					logger::warn(FMT_STRING("Failed to parse the level: {}"), line);
 					continue;
 				}
 
-				uint16_t count;
 				try {
-					count = static_cast<uint16_t>(std::stoul(countStr));
+					distData.count = static_cast<uint16_t>(std::stoul(countStr));
 				}
 				catch (...) {
 					logger::warn(FMT_STRING("Failed to parse the count: {}"), line);
 					continue;
 				}
 
-				int8_t chanceNone;
 				try {
-					chanceNone = static_cast<int8_t>(std::stol(chanceNoneStr));
+					distData.chanceNone = static_cast<uint8_t>(std::stol(chanceNoneStr));
 				}
 				catch (...) {
 					logger::warn(FMT_STRING("Failed to parse the chanceNone: {}"), line);
 					continue;
 				}
-
-				auto add_it = addMap.find(llForm->formID);
-				if (add_it == addMap.end()) {
-					auto ins_res = addMap.insert(std::make_pair(llForm->formID, std::vector<RE::LEVELED_OBJECT>()));
-					if (!ins_res.second)
-						return;
-
-					add_it = ins_res.first;
-				}
-
-				add_it->second.push_back({ addForm, nullptr, count, level, chanceNone });
-
-				logger::info(FMT_STRING("Add: LeveledList[{:08X}] Form[{:08X}] Count[{}] Level[{}] ChanceNone[{}]"), llForm->formID, addForm->formID, count, level, chanceNone);
+				logger::info(FMT_STRING("Add: LeveledList[{}] Form[{}] Count[{}] Level[{}] ChanceNone[{}]"), distData.llForm, distData.targetForm, distData.count, distData.level, distData.chanceNone);
 			}
-			else {	// DELETE
-				RE::TESForm* delForm = Utils::GetFormFromIdentifier(targetFormPluginName, targetFormId);
-				if (!delForm) {
-					logger::warn(FMT_STRING("Invalid delete target form: {} | {}"), targetFormPluginName, targetFormId);
-					continue;
-				}
+			else if (lineType == "DELETE") {
+				distData.type = LeveledLists::DistData::kAdd;
+				distData.targetForm = targetFormPluginName + "|" + targetFormId;
 
-				uint16_t level;
 				try {
-					level = static_cast<uint16_t>(std::stoul(levelStr));
+					distData.level = static_cast<uint16_t>(std::stoul(levelStr));
 				}
 				catch (...) {
 					logger::warn(FMT_STRING("Failed to parse the level: {}"), line);
 					continue;
 				}
-
-				auto del_it = delMap.find(llForm->formID);
-				if (del_it == delMap.end()) {
-					auto ins_res = delMap.insert(std::make_pair(llForm->formID, std::vector<std::pair<uint16_t, RE::TESForm*>>()));
-					if (!ins_res.second)
-						return;
-
-					del_it = ins_res.first;
-				}
-
-				del_it->second.push_back(std::make_pair(level, delForm));
-
-				logger::info(FMT_STRING("Delete: LeveledList[{:08X}] Form[{:08X}] Level[{}]"), llForm->formID, delForm->formID, level);
+				logger::info(FMT_STRING("Delete: LeveledList[{}] Form[{}] Level[{}]"), distData.llForm, distData.targetForm, distData.level);
 			}
+
+			dataVec.push_back(distData);
 		}
 	}
 }
