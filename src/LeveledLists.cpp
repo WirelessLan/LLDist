@@ -63,8 +63,12 @@ namespace LeveledLists {
 		a_lvl->baseListCount = static_cast<int8_t>(vecCnt);
 	}
 
-	void PrepareDistData(const std::vector<LeveledLists::DistData>& dataVec, std::unordered_set<RE::TESForm*>& modSet, std::unordered_set<uint32_t>& clearSet,
-		std::unordered_map<uint32_t, std::vector<RE::LEVELED_OBJECT>>& addMap, std::unordered_map<uint32_t, std::vector<std::pair<uint16_t, RE::TESForm*>>>& delMap) {
+	void PrepareDistData(const std::vector<LeveledLists::DistData>& dataVec, 
+		std::unordered_set<RE::TESForm*>& modSet, std::unordered_set<uint32_t>& clearSet, 
+		std::unordered_map<uint32_t, std::unordered_map<DistData::SetName, uint8_t>>& setMap,
+		std::unordered_map<uint32_t, std::vector<RE::LEVELED_OBJECT>>& addMap, 
+		std::unordered_map<uint32_t, std::vector<std::pair<uint16_t, RE::TESForm*>>>& delMap) {
+		logger::info("======================== Prepare Distribution Start ========================");
 		for (const auto& data : dataVec) {
 			RE::TESForm* llForm = Utils::GetFormFromString(data.llForm);
 			if (!llForm) {
@@ -79,10 +83,23 @@ namespace LeveledLists {
 			}
 
 			switch (data.type) {
-			case DistData::kClear:
+			case DistData::Type::kClear:
 				clearSet.insert(llForm->formID);
 				break;
-			case DistData::kAdd: {
+			case DistData::Type::kSet: {
+				auto set_it = setMap.find(llForm->formID);
+				if (set_it == setMap.end()) {
+					auto ins_res = setMap.insert(std::make_pair(llForm->formID, std::unordered_map<DistData::SetName, uint8_t>()));
+					if (!ins_res.second)
+						return;
+
+					set_it = ins_res.first;
+				}
+
+				set_it->second.insert(std::make_pair(data.setName, data.setValue));
+				break;
+			}
+			case DistData::Type::kAdd: {
 				RE::TESForm* addForm = Utils::GetFormFromString(data.targetForm);
 				if (!addForm) {
 					logger::warn(FMT_STRING("Invalid add target form: {}"), data.targetForm);
@@ -101,7 +118,7 @@ namespace LeveledLists {
 				add_it->second.push_back({ addForm, nullptr, data.count, data.level, static_cast<int8_t>(data.chanceNone) });
 				break;
 			}
-			case DistData::kDelete: {
+			case DistData::Type::kDelete: {
 				RE::TESForm* delForm = Utils::GetFormFromString(data.targetForm);
 				if (!delForm) {
 					logger::warn(FMT_STRING("Invalid delete target form: {}"), data.targetForm);
@@ -127,6 +144,8 @@ namespace LeveledLists {
 
 			modSet.insert(llForm);
 		}
+		logger::info("======================== Prepare Distribution End ========================");
+		logger::info("");
 	}
 
 	void ReadConfigs() {
@@ -144,10 +163,11 @@ namespace LeveledLists {
 
 		std::unordered_set<RE::TESForm*> modSet;
 		std::unordered_set<uint32_t> clearSet;
+		std::unordered_map<uint32_t, std::unordered_map<DistData::SetName, uint8_t>> setMap;
 		std::unordered_map<uint32_t, std::vector<RE::LEVELED_OBJECT>> addMap;
 		std::unordered_map<uint32_t, std::vector<std::pair<uint16_t, RE::TESForm*>>> delMap;
 
-		PrepareDistData(dataVec, modSet, clearSet, addMap, delMap);
+		PrepareDistData(dataVec, modSet, clearSet, setMap, addMap, delMap);
 
 		logger::info("======================== Distribution Start ========================");
 		for (RE::TESForm* form : modSet) {
@@ -155,14 +175,35 @@ namespace LeveledLists {
 			if (!lvlList)
 				continue;
 
-			logger::info(FMT_STRING("┌──────────────── Start: {:08X} ────────────────┐"), form->formID);
+			bool isCleared = false, isAdded = false, isDeleted = false;
+
+			logger::info(FMT_STRING("┌──────────────────────────────── Start: {:08X} ────────────────────────────────┐"), form->formID);
 
 			logger::info(FMT_STRING(" >\tGet {:08X}'s original LL entries... count[{}]"), form->formID, lvlList->baseListCount);
 			std::vector<RE::LEVELED_OBJECT> llVec = GetLL(lvlList);
 
+			auto set_it = setMap.find(form->formID);
+			if (set_it != setMap.end()) {
+				for (const std::pair<DistData::SetName, uint8_t>& setPair : set_it->second) {
+					if (setPair.first == DistData::SetName::kLVLD) {
+						logger::info(FMT_STRING(" >\tSet {:08X}'s LVLD {} to {}"), form->formID, static_cast<uint8_t>(lvlList->chanceNone), setPair.second);
+						lvlList->chanceNone = static_cast<int8_t>(setPair.second);
+					}
+					else if (setPair.first == DistData::SetName::kLVLM) {
+						logger::info(FMT_STRING(" >\tSet {:08X}'s LVLM {} to {}"), form->formID, static_cast<uint8_t>(lvlList->maxUseAllCount), setPair.second);
+						lvlList->maxUseAllCount = static_cast<int8_t>(setPair.second);
+					}
+					else if (setPair.first == DistData::SetName::kLVLF) {
+						logger::info(FMT_STRING(" >\tSet {:08X}'s LVLF {} to {}"), form->formID, static_cast<uint8_t>(lvlList->llFlags), setPair.second);
+						lvlList->llFlags = static_cast<int8_t>(setPair.second);
+					}
+				}
+			}
+
 			if (clearSet.find(form->formID) != clearSet.end()) {
 				logger::info(FMT_STRING(" >\tClear {:08X}'s original LL entries"), form->formID);
 				llVec.clear();
+				isCleared = true;
 			}
 
 			auto del_it = delMap.find(form->formID);
@@ -173,6 +214,7 @@ namespace LeveledLists {
 						return x.level == delPair.first && x.form == delPair.second;
 						}), llVec.end());
 				}
+				isDeleted = true;
 			}
 
 			auto add_it = addMap.find(form->formID);
@@ -182,16 +224,19 @@ namespace LeveledLists {
 						addLvlObj.form->formID, form->formID, addLvlObj.level, addLvlObj.count, static_cast<uint8_t>(addLvlObj.chanceNone));
 					llVec.push_back(addLvlObj);
 				}
+				isAdded = true;
 			}
 
 			std::sort(llVec.begin(), llVec.end(), [](const RE::LEVELED_OBJECT& a, const RE::LEVELED_OBJECT& b) {
 				return a.level < b.level;
 			});
-			
-			logger::info(FMT_STRING(" >\tUpdate {:08X}'s LL entries... count[{}]"), form->formID, llVec.size());
-			SetLL(lvlList, llVec);
 
-			logger::info(FMT_STRING("└──────────────── End:   {:08X} ────────────────┘"), form->formID);
+			if (isCleared || isDeleted || isAdded) {
+				logger::info(FMT_STRING(" >\tUpdate {:08X}'s LL entries... count[{}]"), form->formID, llVec.size());
+				SetLL(lvlList, llVec);
+			}
+
+			logger::info(FMT_STRING("└──────────────────────────────── End:   {:08X} ────────────────────────────────┘"), form->formID);
 			logger::info("");
 		}
 		logger::info("======================== Distribution End ========================");

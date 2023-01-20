@@ -59,7 +59,7 @@ namespace Configs {
 		}
 
 		std::string line;
-		std::string lineType, llFormPluginName, llFormId, targetFormPluginName, targetFormId, levelStr, countStr, chanceNoneStr;
+		std::string lineType, llFormPluginName, llFormId, targetFormPluginName, targetFormId, levelStr, countStr, chanceNoneStr, setName, setValueStr;
 		while (std::getline(configFile, line)) {
 			Utils::Trim(line);
 			if (line.empty() || line[0] == '#')
@@ -124,8 +124,21 @@ namespace Configs {
 					}
 				}
 			}
+			else if (lineType == "SET") {
+				setName = GetNextData(line, index, '|');
+				if (setName.empty()) {
+					logger::warn(FMT_STRING("Cannot read the setName: {}"), line);
+					continue;
+				}
 
-			if (lineType != "CLEAR" && lineType != "ADD" && lineType != "DELETE") {
+				setValueStr = GetNextData(line, index, 0);
+				if (setName.empty()) {
+					logger::warn(FMT_STRING("Cannot read the setValue: {}"), line);
+					continue;
+				}
+			}
+
+			if (lineType != "CLEAR" && lineType != "ADD" && lineType != "DELETE" && lineType != "SET") {
 				logger::warn(FMT_STRING("Invalid lineType: {}"), line);
 				continue;
 			}
@@ -134,11 +147,11 @@ namespace Configs {
 			distData.llForm = llFormPluginName + "|" + llFormId;
 
 			if (lineType == "CLEAR") {
-				distData.type = LeveledLists::DistData::kClear;
+				distData.type = LeveledLists::DistData::Type::kClear;
 				logger::info(FMT_STRING("Clear: LeveledList[{}]"), distData.llForm);
 			}
 			else if (lineType == "ADD") {
-				distData.type = LeveledLists::DistData::kAdd;
+				distData.type = LeveledLists::DistData::Type::kAdd;
 				distData.targetForm = targetFormPluginName + "|" + targetFormId;
 
 				try {
@@ -167,7 +180,7 @@ namespace Configs {
 				logger::info(FMT_STRING("Add: LeveledList[{}] Form[{}] Count[{}] Level[{}] ChanceNone[{}]"), distData.llForm, distData.targetForm, distData.count, distData.level, distData.chanceNone);
 			}
 			else if (lineType == "DELETE") {
-				distData.type = LeveledLists::DistData::kAdd;
+				distData.type = LeveledLists::DistData::Type::kDelete;
 				distData.targetForm = targetFormPluginName + "|" + targetFormId;
 
 				try {
@@ -178,6 +191,38 @@ namespace Configs {
 					continue;
 				}
 				logger::info(FMT_STRING("Delete: LeveledList[{}] Form[{}] Level[{}]"), distData.llForm, distData.targetForm, distData.level);
+			}
+			else if (lineType == "SET") {
+				distData.type = LeveledLists::DistData::Type::kSet;
+				
+				if (setName != "LVLD" && setName != "LVLM" && setName != "LVLF") {
+					logger::warn(FMT_STRING("Invalid setName: {}"), line);
+					continue;
+				}
+
+				try {
+					distData.setValue = static_cast<uint8_t>(std::stol(setValueStr));
+				}
+				catch (...) {
+					logger::warn(FMT_STRING("Failed to parse the setValue: {}"), line);
+					continue;
+				}
+
+				if (setName == "LVLD") {
+					distData.setName = LeveledLists::DistData::SetName::kLVLD;
+				}
+				else if (setName == "LVLM") {
+					distData.setName = LeveledLists::DistData::SetName::kLVLM;
+				}
+				else if (setName == "LVLF") {
+					distData.setName = LeveledLists::DistData::SetName::kLVLF;
+
+					if (distData.setValue > 7) {
+						logger::warn(FMT_STRING("Invalid LVLF setValue: {}"), line);
+						continue;
+					}
+				}
+				logger::info(FMT_STRING("Set: LeveledList[{}] SetName[{}] SetValue[{}]"), distData.llForm, setName, distData.setValue);
 			}
 
 			dataVec.push_back(distData);
