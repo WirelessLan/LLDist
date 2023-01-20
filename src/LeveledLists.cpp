@@ -175,7 +175,7 @@ namespace LeveledLists {
 			if (!lvlList)
 				continue;
 
-			bool isCleared = false, isAdded = false, isDeleted = false;
+			bool isCleared = false, isDeleted = false, isAdded = false;
 
 			logger::info(FMT_STRING("┌──────────────────────────────── Start: {:08X} ────────────────────────────────┐"), form->formID);
 
@@ -208,13 +208,15 @@ namespace LeveledLists {
 
 			auto del_it = delMap.find(form->formID);
 			if (del_it != delMap.end()) {
+				auto pre_del_size = llVec.size();
 				for (const std::pair<uint16_t, RE::TESForm*>& delPair : del_it->second) {
 					logger::info(FMT_STRING(" >\tDelete {:08X} from {:08X}'s LL entries... level[{}]"), delPair.second->formID, form->formID, delPair.first);
 					llVec.erase(std::remove_if(llVec.begin(), llVec.end(), [&](const RE::LEVELED_OBJECT& x) {
 						return x.level == delPair.first && x.form == delPair.second;
 						}), llVec.end());
 				}
-				isDeleted = true;
+				if (pre_del_size != llVec.size())
+					isDeleted = true;
 			}
 
 			auto add_it = addMap.find(form->formID);
