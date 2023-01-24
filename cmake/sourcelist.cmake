@@ -1,6 +1,10 @@
 set(SOURCES
+	src/Distributors.h
+	src/Distributors.cpp
 	src/LeveledLists.h
 	src/LeveledLists.cpp
+	src/FormLists.h
+	src/FormLists.cpp
 	src/Configs.h
 	src/Configs.cpp
 	src/Utils.h

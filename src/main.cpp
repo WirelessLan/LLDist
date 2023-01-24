@@ -1,9 +1,10 @@
-#include "LeveledLists.h"
+#include "Distributors.h"
+#include "Configs.h"
 
 void OnF4SEMessage(F4SE::MessagingInterface::Message* msg) {
 	switch (msg->type) {
 	case F4SE::MessagingInterface::kGameDataReady:
-		LeveledLists::Distribute();
+		Distributors::Distribute();
 		break;
 	}
 }
@@ -56,7 +57,7 @@ extern "C" DLLEXPORT bool F4SEAPI F4SEPlugin_Query(const F4SE::QueryInterface * 
 extern "C" DLLEXPORT bool F4SEAPI F4SEPlugin_Load(const F4SE::LoadInterface * a_f4se) {
 	F4SE::Init(a_f4se);
 
-	LeveledLists::ReadConfigs();
+	Configs::ReadConfigs();
 
 	const F4SE::MessagingInterface* message = F4SE::GetMessagingInterface();
 	if (message)

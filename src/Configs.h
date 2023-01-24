@@ -1,6 +1,6 @@
 #pragma once
 
-#include "LeveledLists.h"
+#include "Distributors.h"
 
 namespace Configs {
 	class ConfigReader {
@@ -9,7 +9,7 @@ namespace Configs {
 
 		void ReadConfigs();
 
-		const std::vector<LeveledLists::DistData>& GetDataVector() { return dataVec; }
+		const std::vector<Distributors::DistData>& GetDataVector() { return dataVec; }
 
 		static ConfigReader* GetSingleton() {
 			static ConfigReader self;
@@ -19,6 +19,8 @@ namespace Configs {
 	protected:
 		void ReadConfigFile(const std::string& path);
 
-		std::vector<LeveledLists::DistData> dataVec;
+		std::vector<Distributors::DistData> dataVec;
 	};
+
+	void ReadConfigs();
 }

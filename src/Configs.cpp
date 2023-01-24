@@ -50,6 +50,16 @@ namespace Configs {
 		return retVal;
 	}
 
+	bool IsEndOfLine(const std::string& line, uint32_t& index) {
+		if (index < line.length()) {
+			if (line[index] == '#')
+				return true;
+			return false;
+		}
+
+		return true;
+	}
+
 	void ConfigReader::ReadConfigFile(const std::string& path) {
 		std::ifstream configFile(path);
 
@@ -59,13 +69,14 @@ namespace Configs {
 		}
 
 		std::string line;
-		std::string lineType, llFormPluginName, llFormId, targetFormPluginName, targetFormId, levelStr, countStr, chanceNoneStr, setName, setValueStr;
+		std::string lineType, distTargetFormPluginName, distTargetFormId, modFormPluginName, modFormId, levelStr, countStr, chanceNoneStr, setName, setValueStr;
 		while (std::getline(configFile, line)) {
 			Utils::Trim(line);
 			if (line.empty() || line[0] == '#')
 				continue;
 
 			uint32_t index = 0;
+			uint32_t argCount = 0;
 
 			lineType = GetNextData(line, index, '|');
 			if (lineType.empty()) {
@@ -73,54 +84,68 @@ namespace Configs {
 				continue;
 			}
 
-			llFormPluginName = GetNextData(line, index, '|');
-			if (llFormPluginName.empty()) {
-				logger::warn(FMT_STRING("Cannot read the llFormPluginName: {}"), line);
+			distTargetFormPluginName = GetNextData(line, index, '|');
+			if (distTargetFormPluginName.empty()) {
+				logger::warn(FMT_STRING("Cannot read the distTargetFormPluginName: {}"), line);
 				continue;
 			}
 
 			if (lineType == "CLEAR")
-				llFormId = GetNextData(line, index, 0);
+				distTargetFormId = GetNextData(line, index, 0);
 			else
-				llFormId = GetNextData(line, index, '|');
-			if (llFormId.empty()) {
-				logger::warn(FMT_STRING("Cannot read the llFormId: {}"), line);
+				distTargetFormId = GetNextData(line, index, '|');
+			if (distTargetFormId.empty()) {
+				logger::warn(FMT_STRING("Cannot read the distTargetFormId: {}"), line);
 				continue;
 			}
 
+			argCount++;
+
 			if (lineType == "ADD" || lineType == "DELETE") {
-				targetFormPluginName = GetNextData(line, index, '|');
-				if (targetFormPluginName.empty()) {
-					logger::warn(FMT_STRING("Cannot read the targetFormPluginName: {}"), line);
+				modFormPluginName = GetNextData(line, index, '|');
+				if (modFormPluginName.empty()) {
+					logger::warn(FMT_STRING("Cannot read the modFormPluginName: {}"), line);
 					continue;
 				}
 
-				targetFormId = GetNextData(line, index, '|');
-				if (targetFormId.empty()) {
-					logger::warn(FMT_STRING("Cannot read the targetFormId: {}"), line);
+				// End of FLST DistData
+				modFormId = GetNextData(line, index, '|');
+				if (modFormId.empty()) {
+					logger::warn(FMT_STRING("Cannot read the modFormId: {}"), line);
 					continue;
 				}
 
-				if (lineType == "DELETE")
-					levelStr = GetNextData(line, index, 0);
-				else
-					levelStr = GetNextData(line, index, '|');
-				if (levelStr.empty()) {
-					logger::warn(FMT_STRING("Cannot read the levelStr: {}"), line);
-					continue;
-				}
+				argCount++;
 
-				if (lineType == "ADD") {
-					countStr = GetNextData(line, index, '|');
-					if (countStr.empty()) {
-						logger::warn(FMT_STRING("Cannot read the countStr: {}"), line);
+				// For LL DistData
+				if (!IsEndOfLine(line, index)) {
+					if (lineType == "DELETE")
+						levelStr = GetNextData(line, index, 0);
+					else
+						levelStr = GetNextData(line, index, '|');
+					if (levelStr.empty()) {
+						logger::warn(FMT_STRING("Cannot read the levelStr: {}"), line);
 						continue;
 					}
 
-					chanceNoneStr = GetNextData(line, index, 0);
-					if (chanceNoneStr.empty()) {
-						logger::warn(FMT_STRING("Cannot read the chanceNoneStr: {}"), line);
-						continue;
+					argCount++;
+
+					if (lineType == "ADD") {
+						countStr = GetNextData(line, index, '|');
+						if (countStr.empty()) {
+							logger::warn(FMT_STRING("Cannot read the countStr: {}"), line);
+							continue;
+						}
+
+						argCount++;
+
+						chanceNoneStr = GetNextData(line, index, 0);
+						if (chanceNoneStr.empty()) {
+							logger::warn(FMT_STRING("Cannot read the chanceNoneStr: {}"), line);
+							continue;
+						}
+
+						argCount++;
 					}
 				}
 			}
@@ -131,11 +156,15 @@ namespace Configs {
 					continue;
 				}
 
+				argCount++;
+
 				setValueStr = GetNextData(line, index, 0);
 				if (setName.empty()) {
 					logger::warn(FMT_STRING("Cannot read the setValue: {}"), line);
 					continue;
 				}
+
+				argCount++;
 			}
 
 			if (lineType != "CLEAR" && lineType != "ADD" && lineType != "DELETE" && lineType != "SET") {
@@ -143,89 +172,109 @@ namespace Configs {
 				continue;
 			}
 
-			LeveledLists::DistData distData;
-			distData.llForm = llFormPluginName + "|" + llFormId;
+			Distributors::DistData distData;
+			distData.args["DistTargetForm"] = Distributors::DistArg::SetArg(distTargetFormPluginName + "|" + distTargetFormId);
 
 			if (lineType == "CLEAR") {
-				distData.type = LeveledLists::DistData::Type::kClear;
-				logger::info(FMT_STRING("Clear: LeveledList[{}]"), distData.llForm);
+				distData.type = Distributors::DistData::Type::kClear;
+				logger::info(FMT_STRING("Clear: DistTargetForm[{}]"), distData.args["DistTargetForm"].stringValue);
 			}
 			else if (lineType == "ADD") {
-				distData.type = LeveledLists::DistData::Type::kAdd;
-				distData.targetForm = targetFormPluginName + "|" + targetFormId;
+				distData.type = Distributors::DistData::Type::kAdd;
+				distData.args["AddForm"] = Distributors::DistArg::SetArg(modFormPluginName + "|" + modFormId);
 
-				try {
-					distData.level = static_cast<uint16_t>(std::stoul(levelStr));
+				// For FLST DistData
+				if (argCount == 2) {
+					logger::info(FMT_STRING("Add: DistTargetForm[{}] AddForm[{}]"),
+						distData.args["DistTargetForm"].stringValue, distData.args["AddForm"].stringValue);
 				}
-				catch (...) {
-					logger::warn(FMT_STRING("Failed to parse the level: {}"), line);
-					continue;
-				}
+				// For LL DistData
+				else {
+					try {
+						distData.args["Level"] = Distributors::DistArg::SetArg(static_cast<uint16_t>(std::stoul(levelStr)));
+					}
+					catch (...) {
+						logger::warn(FMT_STRING("Failed to parse the level: {}"), line);
+						continue;
+					}
 
-				try {
-					distData.count = static_cast<uint16_t>(std::stoul(countStr));
-				}
-				catch (...) {
-					logger::warn(FMT_STRING("Failed to parse the count: {}"), line);
-					continue;
-				}
+					try {
+						distData.args["Count"] = Distributors::DistArg::SetArg(static_cast<uint16_t>(std::stoul(countStr)));
+					}
+					catch (...) {
+						logger::warn(FMT_STRING("Failed to parse the count: {}"), line);
+						continue;
+					}
 
-				try {
-					distData.chanceNone = static_cast<uint8_t>(std::stol(chanceNoneStr));
+					try {
+						distData.args["ChanceNone"] = Distributors::DistArg::SetArg(static_cast<uint8_t>(std::stol(chanceNoneStr)));
+					}
+					catch (...) {
+						logger::warn(FMT_STRING("Failed to parse the chanceNone: {}"), line);
+						continue;
+					}
+
+					logger::info(FMT_STRING("Add: DistTargetForm[{}] AddForm[{}] Level[{}] Count[{}] ChanceNone[{}]"),
+						distData.args["DistTargetForm"].stringValue, distData.args["AddForm"].stringValue,
+						distData.args["Level"].u16Value, distData.args["Count"].u16Value, distData.args["ChanceNone"].u8Value);
 				}
-				catch (...) {
-					logger::warn(FMT_STRING("Failed to parse the chanceNone: {}"), line);
-					continue;
-				}
-				logger::info(FMT_STRING("Add: LeveledList[{}] Form[{}] Count[{}] Level[{}] ChanceNone[{}]"), distData.llForm, distData.targetForm, distData.count, distData.level, distData.chanceNone);
 			}
 			else if (lineType == "DELETE") {
-				distData.type = LeveledLists::DistData::Type::kDelete;
-				distData.targetForm = targetFormPluginName + "|" + targetFormId;
+				distData.type = Distributors::DistData::Type::kDelete;
+				distData.args["DeleteForm"] = Distributors::DistArg::SetArg(modFormPluginName + "|" + modFormId);
 
-				try {
-					distData.level = static_cast<uint16_t>(std::stoul(levelStr));
+				// For FLST DistData
+				if (argCount == 2) {
+					logger::info(FMT_STRING("Delete: DistTargetForm[{}] DeleteForm[{}]"),
+						distData.args["DistTargetForm"].stringValue, distData.args["DeleteForm"].stringValue);
 				}
-				catch (...) {
-					logger::warn(FMT_STRING("Failed to parse the level: {}"), line);
-					continue;
+				// For LL DistData
+				else {
+					try {
+						distData.args["Level"] = Distributors::DistArg::SetArg(static_cast<uint16_t>(std::stoul(levelStr)));
+					}
+					catch (...) {
+						logger::warn(FMT_STRING("Failed to parse the level: {}"), line);
+						continue;
+					}
+
+					logger::info(FMT_STRING("Delete: DistTargetForm[{}] DeleteForm[{}] Level[{}]"),
+						distData.args["DistTargetForm"].stringValue, distData.args["DeleteForm"].stringValue, distData.args["Level"].u16Value);
 				}
-				logger::info(FMT_STRING("Delete: LeveledList[{}] Form[{}] Level[{}]"), distData.llForm, distData.targetForm, distData.level);
 			}
 			else if (lineType == "SET") {
-				distData.type = LeveledLists::DistData::Type::kSet;
+				distData.type = Distributors::DistData::Type::kSet;
 				
 				if (setName != "LVLD" && setName != "LVLM" && setName != "LVLF") {
 					logger::warn(FMT_STRING("Invalid setName: {}"), line);
 					continue;
 				}
 
+				distData.args["SetName"] = Distributors::DistArg::SetArg(setName);
+
 				try {
-					distData.setValue = static_cast<uint8_t>(std::stol(setValueStr));
+					distData.args["SetValue"] = Distributors::DistArg::SetArg(static_cast<uint8_t>(std::stol(setValueStr)));
 				}
 				catch (...) {
 					logger::warn(FMT_STRING("Failed to parse the setValue: {}"), line);
 					continue;
 				}
 
-				if (setName == "LVLD") {
-					distData.setName = LeveledLists::DistData::SetName::kLVLD;
+				if (distData.args["SetName"].stringValue == "LVLF" && distData.args["SetValue"].u8Value > 7) {
+					logger::warn(FMT_STRING("Invalid LVLF setValue: {}"), line);
+					continue;
 				}
-				else if (setName == "LVLM") {
-					distData.setName = LeveledLists::DistData::SetName::kLVLM;
-				}
-				else if (setName == "LVLF") {
-					distData.setName = LeveledLists::DistData::SetName::kLVLF;
 
-					if (distData.setValue > 7) {
-						logger::warn(FMT_STRING("Invalid LVLF setValue: {}"), line);
-						continue;
-					}
-				}
-				logger::info(FMT_STRING("Set: LeveledList[{}] SetName[{}] SetValue[{}]"), distData.llForm, setName, distData.setValue);
+				logger::info(FMT_STRING("Set: DistTargetForm[{}] SetName[{}] SetValue[{}]"), 
+					distData.args["DistTargetForm"].stringValue, distData.args["SetName"].stringValue, distData.args["SetValue"].u8Value);
 			}
 
 			dataVec.push_back(distData);
 		}
+	}
+
+	void ReadConfigs() {
+		Configs::ConfigReader* g_configReader = Configs::ConfigReader::GetSingleton();
+		g_configReader->ReadConfigs();
 	}
 }
