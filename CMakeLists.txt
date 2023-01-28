@@ -27,7 +27,7 @@ set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL" CACHE 
 
 project(
 	LLDist
-	VERSION 0.4.0
+	VERSION 0.4.1
 	LANGUAGES CXX
 )
 

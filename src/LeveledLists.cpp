@@ -17,9 +17,9 @@ namespace LeveledLists {
 		RE::LEVELED_OBJECT ll[];
 	};
 
-	LL_ALLOC* AllocateLL(uint32_t size) {
+	LL_ALLOC* AllocateLL(uint32_t entryCnt) {
 		RE::MemoryManager mm = RE::MemoryManager::GetSingleton();
-		return (LL_ALLOC*)mm.Allocate(size, 0, 0);
+		return (LL_ALLOC*)mm.Allocate(sizeof(RE::LEVELED_OBJECT) * entryCnt + sizeof(size_t), 0, 0);
 	}
 
 	std::vector<RE::LEVELED_OBJECT> GetLL(RE::TESLeveledList* a_lvl) {
@@ -48,7 +48,7 @@ namespace LeveledLists {
 			return;
 
 		uint32_t vecCnt = static_cast<uint32_t>(a_llad.size());
-		LL_ALLOC* nLL = AllocateLL(sizeof(RE::LEVELED_OBJECT) * vecCnt + sizeof(uint32_t));
+		LL_ALLOC* nLL = AllocateLL(vecCnt);
 		if (!nLL)
 			return;
 
